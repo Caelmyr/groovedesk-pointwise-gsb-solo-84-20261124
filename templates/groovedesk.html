@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GrooveDesk · 盘面巡检</title>
+  <link rel="stylesheet" href="/static/groovedesk.css">
+  <script defer src="/static/groovedesk.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><span class="disc" aria-hidden="true"></span>GrooveDesk</a>
+    <span class="header-title">盘面巡检</span>
+    <div class="top-actions"><a href="/prepare">照片准备 ↗</a><button id="sample" class="subtle">载入练习唱片</button><label class="button primary">＋ 导入原片<input id="file" aria-label="导入原片" type="file" accept="image/png,image/tiff,image/jpeg,.tif,.tiff"></label></div>
+  </header>
+  <main>
+    <aside class="library">
+      <h2>照片库</h2>
+      <nav id="library" aria-label="照片库"></nav>
+      <h2 class="sub-heading">检查记录</h2>
+      <nav id="archive" aria-label="检查记录"></nav>
+    </aside>
+    <section class="workspace" aria-label="盘面工作区">
+      <header class="work-title"><div><p class="overline" id="file-info">原片与展开</p><h1 id="title">唱片盘面</h1></div><span id="mode-tag" class="tag" hidden></span></header>
+      <div id="empty" class="empty"><div class="empty-record"></div><h2>打开一张盘面照片</h2><p>导入原片，或载入合成练习唱片查看流程。</p></div>
+      <div id="desk" hidden>
+        <div class="canvas-area">
+          <div class="canvas-caption">原片 <output id="cursor">点选展开图或检查行定位</output></div>
+          <svg id="photo" role="img" aria-label="原始盘面与标定" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+        <div class="strip-area">
+          <div class="canvas-caption"><span id="strip-title">圆周展开</span><output id="strip-help">外圈在上 · 点击回到原片</output></div>
+          <svg id="strip" viewBox="0 0 960 160" preserveAspectRatio="none" role="img" aria-label="唱片环区展开"></svg>
+          <div id="axis" class="axis"></div>
+        </div>
+        <section class="report">
+          <div class="report-top"><h2 id="result-heading"></h2><button id="save" class="primary">保存检查</button><button id="return-live" class="subtle" hidden>返回本次检查</button></div>
+          <div id="downloads" hidden><a id="csv" download>下载 CSV</a><a id="overlay" download>下载原片标注</a><a id="strip-download" download>下载展开 PNG</a></div>
+          <div class="results"><table><thead id="result-header"></thead><tbody id="result-rows"></tbody></table><p id="no-rows" hidden>当前没有标记。</p></div>
+        </section>
+      </div>
+    </section>
+    <aside id="controls" class="controls" hidden>
+      <section>
+        <h2>环区标定</h2>
+        <div id="cal-tools" class="tool-grid">
+          <button data-tool="center">盘心</button><button data-tool="inner">内圈</button>
+          <button data-tool="outer">外圈</button><button data-tool="phase">零位</button>
+        </div>
+        <p id="cal-hint">可在原片点选位置，也可微调数值。</p>
+        <div class="fields">
+          <label>内半径<input type="number" id="inner" min=".02" max=".84" step=".001"></label>
+          <label>外半径<input type="number" id="outer" min=".04" max=".9" step=".001"></label>
+          <label>零位 °<input type="number" id="phase" min="0" max="360" step=".1"></label>
+          <label>实测直径 mm<input type="number" id="diameter" min="10" max="1000" step=".1"></label>
+        </div>
+        <div class="actions"><button id="refresh">更新展开</button><button id="retain">保留标定</button></div>
+      </section>
+      <section>
+        <h2>检查</h2>
+        <div id="modes" class="mode-list"></div>
+        <div id="slice-controls" class="fields" hidden>
+          <label>切片起角 °<input type="number" id="angle" min="0" max="360" step="1"></label>
+          <label>切片角宽 °<input type="number" id="span" min="1" max="180" step="1"></label>
+        </div>
+        <div id="mark-controls" class="actions">
+          <label class="sr-only" for="kind">标记类别</label><select id="kind"></select><button id="add-mark">添加标记</button>
+        </div>
+      </section>
+      <p id="status" role="status" aria-live="polite"></p>
+    </aside>
+  </main>
+</body>
+</html>
