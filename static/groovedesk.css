@@ -64,6 +64,9 @@ nav button .detail { display: block; color: var(--muted); font-weight: normal; m
 .strip-area { margin-top: 10px; }
 #strip { display: block; width: 100%; height: clamp(70px, 11vh, 115px); background: #171a16; cursor: crosshair; }
 .axis { display: flex; justify-content: space-between; padding: 6px 12px; color: #c7cbbe; font: 11px ui-monospace, monospace; }
+.seam-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border-top: 1px solid #41453c; background: #2e3329; color: #eaece3; font-size: 12px; }
+.seam-bar span { flex: 1; min-width: 220px; }
+.seam-bar button { padding: 4px 10px; font-size: 12px; }
 .report { margin-top: 16px; border: 1px solid var(--line); background: var(--paper); border-radius: 9px; overflow: hidden; }
 .report-top { padding: 13px 15px; }
 .report-top h2 { margin: 0; }

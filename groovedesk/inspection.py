@@ -34,7 +34,8 @@ def surface(disk):
             "id": mark["id"], "kind": model.MARKS[mark["kind"]], "angle": digits((angle - settings["phase"]) % 360),
             "span": mark["span"], "width": digits(radial_mm),
             "point": visible_point(disk, angle, radius),
-            "segments": polar.sector_segments(mark["start"], mark["span"], settings["phase"]),
+            "segments": polar.sector_segments(mark["start"], mark["span"],
+                                              settings["phase"] + settings.get("seam", 0.0)),
         })
     return [column("标记", "id"), column("类别", "kind"), column("角度 °", "angle"),
             column("角宽 °", "span"), column("径向宽 mm", "width")], rows

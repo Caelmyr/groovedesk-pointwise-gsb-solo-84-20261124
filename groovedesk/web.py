@@ -111,14 +111,22 @@ def install(app, path):
         panel = library.panel(panel_id)
         chosen = model.settings(value.get("settings", {}), panel["settings"])
         sliced = value.get("mode") == "slice"
-        return strip_file(panel, chosen, chosen["angle"] if sliced else 0, chosen["span"] if sliced else 360)
+        return strip_file(panel, chosen, chosen["angle"] if sliced else chosen["seam"],
+                          chosen["span"] if sliced else 360)
+
+    @api.post("/panels/<panel_id>/seam")
+    def seam(panel_id):
+        value = payload()
+        panel = library.panel(panel_id)
+        chosen = model.settings(value.get("settings", {}), panel["settings"])
+        return jsonify(polar.suggest_seam(chosen))
 
     @api.get("/panels/<panel_id>/checks/<check_id>/strip.png")
     def saved_strip(panel_id, check_id):
         result = library.check(panel_id, check_id)
         chosen = result["settings"]
         sliced = result["mode"] == "slice"
-        return strip_file(result, chosen, chosen["angle"] if sliced else 0,
+        return strip_file(result, chosen, chosen["angle"] if sliced else chosen.get("seam", 0.0),
                           chosen["span"] if sliced else 360, download=True)
 
     @api.post("/panels/<panel_id>/checks")

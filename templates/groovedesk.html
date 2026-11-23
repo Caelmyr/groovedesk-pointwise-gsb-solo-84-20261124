@@ -32,6 +32,7 @@
           <div class="canvas-caption"><span id="strip-title">圆周展开</span><output id="strip-help">外圈在上 · 点击回到原片</output></div>
           <svg id="strip" viewBox="0 0 960 160" preserveAspectRatio="none" role="img" aria-label="唱片环区展开"></svg>
           <div id="axis" class="axis"></div>
+          <div id="seam-bar" class="seam-bar" hidden><span id="seam-text"></span><button id="seam-apply" class="primary">采用接缝</button><button id="seam-hide" class="subtle">忽略</button></div>
         </div>
         <section class="report">
           <div class="report-top"><h2 id="result-heading"></h2><button id="save" class="primary">保存检查</button><button id="return-live" class="subtle" hidden>返回本次检查</button></div>
@@ -52,6 +53,7 @@
           <label>内半径<input type="number" id="inner" min=".02" max=".84" step=".001"></label>
           <label>外半径<input type="number" id="outer" min=".04" max=".9" step=".001"></label>
           <label>零位 °<input type="number" id="phase" min="0" max="360" step=".1"></label>
+          <label>接缝 °<input type="number" id="seam" min="0" max="360" step=".1"></label>
           <label>实测直径 mm<input type="number" id="diameter" min="10" max="1000" step=".1"></label>
         </div>
         <div class="actions"><button id="refresh">更新展开</button><button id="retain">保留标定</button></div>
@@ -64,7 +66,7 @@
           <label>切片角宽 °<input type="number" id="span" min="1" max="180" step="1"></label>
         </div>
         <div id="mark-controls" class="actions">
-          <label class="sr-only" for="kind">标记类别</label><select id="kind"></select><button id="add-mark">添加标记</button>
+          <label class="sr-only" for="kind">标记类别</label><select id="kind"></select><button id="add-mark">添加标记</button><button id="suggest-seam">建议接缝</button>
         </div>
       </section>
       <p id="status" role="status" aria-live="polite"></p>

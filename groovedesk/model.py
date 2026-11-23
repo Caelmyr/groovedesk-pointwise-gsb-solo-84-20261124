@@ -14,7 +14,7 @@ MODES = {
     "slice": "角度切片",
 }
 MARKS = {"scratch": "擦伤", "chip": "磕口", "reference": "参照", "dust": "颗粒"}
-DEFAULTS = {"center": [0.5, 0.5], "inner": 0.23, "outer": 0.46, "phase": 0.0,
+DEFAULTS = {"center": [0.5, 0.5], "inner": 0.23, "outer": 0.46, "phase": 0.0, "seam": 0.0,
             "diameter": 300.0, "angle": 45.0, "span": 30.0, "marks": []}
 
 
@@ -79,6 +79,7 @@ def settings(value, fallback):
         "center": [numeric(axis, "盘心", 0, 1) for axis in center],
         "inner": inner, "outer": outer,
         "phase": numeric(chosen["phase"], "盘面零位", 0, 360) % 360,
+        "seam": numeric(chosen.get("seam", 0.0), "展开接缝", 0, 360) % 360,
         "diameter": numeric(chosen["diameter"], "外圈实测直径", 10, 1000),
         "angle": numeric(chosen["angle"], "切片起角", 0, 360) % 360,
         "span": numeric(chosen["span"], "切片角宽", 1, 180),

@@ -2,9 +2,10 @@
 
 const $ = id => document.getElementById(id);
 const state = {config: null, panel: null, draft: null, result: null, archive: null,
-  mode: 'surface', tool: null, markStart: null, cursor: null, selection: null, stripUrl: null};
+  mode: 'surface', tool: null, markStart: null, cursor: null, selection: null, stripUrl: null,
+  seamSuggestion: null};
 const apiRoot = '/groove';
-const fieldNames = ['inner', 'outer', 'phase', 'diameter', 'angle', 'span'];
+const fieldNames = ['inner', 'outer', 'phase', 'seam', 'diameter', 'angle', 'span'];
 const TAU = 2 * Math.PI;
 const SVG = 'http://www.w3.org/2000/svg';
 let busy = false;
@@ -107,6 +108,12 @@ function drawPhoto() {
   const [x2, y2] = sourcePoint(settings.phase, settings.outer, settings);
   nodes.push(graphic('line', {x1: cx, y1: cy, x2, y2, stroke: '#7de1b5', 'stroke-width': 1.2, 'stroke-dasharray': '7 5',
     'vector-effect': 'non-scaling-stroke'}));
+  const seam = normalAngle(settings.seam ?? 0);
+  if (seam) {
+    const [sx, sy] = sourcePoint(settings.phase + seam, settings.outer, settings);
+    nodes.push(graphic('line', {x1: cx, y1: cy, x2: sx, y2: sy, stroke: '#8fb8ff', 'stroke-width': 1.2,
+      'stroke-dasharray': '2 4', 'vector-effect': 'non-scaling-stroke'}));
+  }
   nodes.push(graphic('circle', {cx, cy, r: Math.max(2, radiusUnit() / 120), fill: 'none', stroke: '#7de1b5',
     'vector-effect': 'non-scaling-stroke'}));
   const selected = (state.archive || state.result)?.rows[state.selection];
@@ -135,7 +142,7 @@ function drawPhoto() {
 function stripRange() {
   const visible = state.archive || state.result;
   const settings = visible.settings;
-  return visible.mode === 'slice' ? [settings.angle, settings.span] : [0, 360];
+  return visible.mode === 'slice' ? [settings.angle, settings.span] : [settings.seam ?? 0, 360];
 }
 
 function drawStrip() {
@@ -165,15 +172,21 @@ function drawStrip() {
   if (state.markStart) {
     nodes.push(graphic('circle', {cx: state.markStart[0], cy: state.markStart[1], r: 5, fill: '#ffbd76'}));
   }
+  const [start, sweep] = stripRange();
+  if (state.seamSuggestion) {
+    const x = normalAngle(state.seamSuggestion.seam - start) / sweep * 960;
+    nodes.push(graphic('line', {x1: x, y1: 0, x2: x, y2: 160, stroke: '#8fb8ff', 'stroke-width': 1.6,
+      'stroke-dasharray': '6 4', 'vector-effect': 'non-scaling-stroke'}));
+  }
   svg.replaceChildren(...nodes);
   svg.classList.toggle('choosing', state.tool === 'mark');
   $('strip-title').textContent = result.mode === 'slice' ? '角度切片' : '圆周展开';
-  const [start, sweep] = stripRange();
   $('axis').replaceChildren(...[0, .25, .5, .75, 1].map(part =>
-    element('span', `${Number((start + sweep * part).toFixed(1))}°`)));
+    element('span', `${Number(normalAngle(start + sweep * part).toFixed(1))}°`)));
+  const seamNote = result.mode !== 'slice' && start ? `接缝 ${Number(start.toFixed(1))}° · ` : '';
   $('strip-help').textContent = state.tool === 'mark'
     ? (state.markStart ? '点击另一个角完成标记' : '点击标记的第一个角')
-    : '外圈在上 · 点击回到原片';
+    : seamNote + '外圈在上 · 点击回到原片';
 }
 
 function focusRow(index) {
@@ -276,6 +289,8 @@ async function inspect() {
   state.selection = null;
   state.markStart = null;
   state.tool = null;
+  state.seamSuggestion = null;
+  $('seam-bar').hidden = true;
   showFields();
   drawMode();
   drawPhoto();
@@ -308,6 +323,8 @@ async function showArchive(record) {
   state.selection = null;
   state.tool = null;
   state.markStart = null;
+  state.seamSuggestion = null;
+  $('seam-bar').hidden = true;
   const root = apiRoot + panelPath() + '/checks/' + record.id;
   $('csv').href = root + '/report.csv';
   $('overlay').href = root + '/overlay.png';
@@ -406,6 +423,29 @@ $('file').onchange = action(async event => {
 });
 for (const node of document.querySelectorAll('[data-tool]')) node.onclick = action(() => pickTool(node.dataset.tool));
 $('add-mark').onclick = action(() => pickTool('mark'));
+$('suggest-seam').onclick = action(async () => {
+  applyFields();
+  const idea = await api(panelPath() + '/seam', 'POST', {settings: state.draft});
+  state.seamSuggestion = idea;
+  const margins = idea.left === null ? '' : `，两端余量 ${idea.left.toFixed(1)}° / ${idea.right.toFixed(1)}°`;
+  $('seam-text').textContent = idea.cut.length
+    ? `建议接缝 ${idea.seam.toFixed(1)}°：标记围满一圈，将切断 ${idea.cut.join('、')}${margins}`
+    : `建议接缝 ${idea.seam.toFixed(1)}°：不切断任何标记${margins}`;
+  $('seam-bar').hidden = false;
+  drawStrip();
+});
+$('seam-apply').onclick = action(async () => {
+  if (!state.seamSuggestion) return;
+  applyFields();
+  state.draft.seam = state.seamSuggestion.seam;
+  await inspect();
+  tell(`已采用接缝 ${state.draft.seam.toFixed(1)}°，保留标定或保存检查后生效`);
+});
+$('seam-hide').onclick = action(async () => {
+  state.seamSuggestion = null;
+  $('seam-bar').hidden = true;
+  drawStrip();
+});
 $('refresh').onclick = action(async () => {
   applyFields();
   await inspect();

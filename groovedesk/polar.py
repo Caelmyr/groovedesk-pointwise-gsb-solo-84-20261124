@@ -70,9 +70,42 @@ def unroll(disk, start=0, sweep=360, width=WIDTH):
     return Image.fromarray(np.dstack((pixels, alpha)))
 
 
-def sector_segments(start, span, phase):
-    left = (start - phase) % 360
+def sector_segments(start, span, origin):
+    left = (start - origin) % 360
     right = left + span
     if right <= 360:
         return [[left, right]]
     return [[left, 360], [0, right - 360]]
+
+
+def suggest_seam(settings):
+    """Choose a strip seam, in degrees from the phase zero, that spares marked sectors.
+
+    Fewest marks cut wins; ties go to the widest clear interval so the seam sits
+    mid-gap with intact surface on both sides, then to the lowest angle.  Margins
+    report the clear degrees from the seam to the nearest mark edge on each side.
+    """
+    phase = settings["phase"]
+    intervals = [(mark["id"], (mark["start"] - phase) % 360, mark["span"])
+                 for mark in settings.get("marks", [])]
+    if not intervals:
+        return {"seam": 0.0, "cut": [], "left": None, "right": None}
+
+    def cut_at(angle):
+        return [name for name, start, span in intervals
+                if 1e-9 < (angle - start) % 360 < span - 1e-9]
+
+    edges = sorted({edge % 360 for _, start, span in intervals for edge in (start, start + span)})
+    best = None
+    for index, low in enumerate(edges):
+        high = edges[(index + 1) % len(edges)] + (360 if index + 1 == len(edges) else 0)
+        if high - low <= 0:
+            continue
+        mid = low + (high - low) / 2
+        candidate = (len(cut_at(mid % 360)), low - high, mid % 360)
+        if best is None or candidate < best:
+            best = candidate
+    seam = round(best[2], 1)
+    left = round(min((seam - edge) % 360 for edge in edges), 1)
+    right = round(min((edge - seam) % 360 for edge in edges), 1)
+    return {"seam": seam, "cut": cut_at(seam), "left": left, "right": right}

@@ -37,6 +37,11 @@ def overlay(image, result):
     angle = radians(settings["phase"])
     radius = unit * settings["outer"]
     brush.line(((cx, cy), (cx + radius * sin(angle), cy - radius * cos(angle))), fill=green, width=2)
+    seam = settings.get("seam", 0.0) % 360
+    if seam:
+        angle = radians(settings["phase"] + seam)
+        brush.line(((cx, cy), (cx + radius * sin(angle), cy - radius * cos(angle))),
+                   fill=(143, 184, 255), width=2)
     for row in result["rows"]:
         x, y = row["point"]
         brush.ellipse((x - 3, y - 3, x + 3, y + 3), outline=orange, width=2)
