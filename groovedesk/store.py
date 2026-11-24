@@ -68,7 +68,8 @@ class Library:
         value = {
             "id": uuid4().hex, "title": title, "filename": filename, "source": fingerprint,
             "width": size[0], "height": size[1], "created": stamp(), "revision": 1,
-            "settings": deepcopy(settings), "checks": [], "provenance": provenance or {"kind": "upload"},
+            "settings": deepcopy(settings), "checks": [], "companion": None,
+            "provenance": provenance or {"kind": "upload"},
         }
         with self.lock:
             path = self.source(value)
@@ -89,6 +90,29 @@ class Library:
             record["settings"] = settings
             record["revision"] += 1
             write_document(self.panel_path(panel_id), record)
+        return record
+
+    def pair(self, panel_id, companion_id):
+        with self.lock:
+            record = self.panel(panel_id)
+            if companion_id is not None and companion_id != panel_id:
+                other = self.panel(companion_id)
+                companion_id = other["id"]
+            else:
+                companion_id = None
+            previous = record.get("companion")
+            record["companion"] = companion_id
+            write_document(self.panel_path(panel_id), record)
+            if previous and previous != panel_id and previous != companion_id:
+                former = self.panel(previous)
+                if former.get("companion") == panel_id:
+                    former["companion"] = None
+                    write_document(self.panel_path(previous), former)
+            if companion_id:
+                other = self.panel(companion_id)
+                if other.get("companion") != panel_id:
+                    other["companion"] = panel_id
+                    write_document(self.panel_path(companion_id), other)
         return record
 
     def retain(self, panel_id, revision, result):

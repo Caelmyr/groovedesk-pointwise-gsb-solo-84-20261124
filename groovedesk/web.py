@@ -8,7 +8,7 @@ from werkzeug.exceptions import NotFound
 
 from image_lab.validation import Invalid
 
-from . import demo, inspection, model, output, photo, polar
+from . import crosscheck, demo, inspection, model, output, photo, polar
 from .store import Library
 
 
@@ -92,6 +92,66 @@ def install(app, path):
         chosen = model.settings(value.get("settings", {}), panel["settings"])
         return jsonify(library.revise(panel_id, value.get("revision"), chosen))
 
+    @api.put("/panels/<panel_id>/pair")
+    def pair(panel_id):
+        value = payload()
+        companion = value.get("companion")
+        companion_id = model.text_value(companion, "对照片编号") if companion is not None else None
+        return jsonify(library.pair(panel_id, companion_id))
+
+    def companion_record(panel):
+        companion_id = panel.get("companion")
+        if not companion_id:
+            raise Invalid("请先为这张原片选择一张不同光向的对照片。")
+        companion = library.panel(companion_id)
+        return companion
+
+    def crosscheck_result(panel, companion, chosen, mark_id):
+        mark = crosscheck.find_mark(chosen, mark_id)
+        disks = {
+            "a": polar.open_disk(library.source(panel), chosen),
+            "b": polar.open_disk(library.source(companion), companion["settings"]),
+        }
+        result = crosscheck.analyze(disks, {"a": chosen, "b": companion["settings"]}, mark)
+        result.update({
+            "mode": "crosscheck", "heading": "双片同位核对",
+            "columns": [
+                {"title": "证据段", "key": "id"},
+                {"title": "判定", "key": "verdict_label"},
+                {"title": "盘角范围", "key": "angle_range"},
+                {"title": "A 片反差", "key": "a_contrast"},
+                {"title": "B 片反差", "key": "b_contrast"},
+                {"title": "A 片极性", "key": "a_polarity"},
+                {"title": "B 片极性", "key": "b_polarity"},
+            ],
+            "settings": chosen, "companion_settings": companion["settings"],
+            "panel_id": panel["id"], "companion_id": companion["id"],
+            "panel_title": panel["title"], "companion_title": companion["title"],
+            "width": panel["width"], "height": panel["height"],
+            "companion_width": companion["width"], "companion_height": companion["height"],
+        })
+        return result
+
+    @api.post("/panels/<panel_id>/crosscheck")
+    def run_crosscheck(panel_id):
+        value = payload()
+        panel = library.panel(panel_id)
+        companion = companion_record(panel)
+        request_settings = model.crosscheck(value)
+        return jsonify(crosscheck_result(panel, companion, request_settings["settings"], request_settings["mark"]))
+
+    @api.post("/panels/<panel_id>/crosscheck/save")
+    def save_crosscheck(panel_id):
+        value = payload()
+        panel = library.panel(panel_id)
+        companion = companion_record(panel)
+        revision = value.get("revision")
+        library.require_revision(panel, revision)
+        request_settings = model.crosscheck(value)
+        result = crosscheck_result(panel, companion, request_settings["settings"], request_settings["mark"])
+        current, saved = library.retain(panel_id, revision, result)
+        return jsonify(panel=current, check=saved), 201
+
     @api.post("/panels/<panel_id>/preview")
     def preview(panel_id):
         value = payload()
@@ -145,8 +205,14 @@ def install(app, path):
     @api.get("/panels/<panel_id>/checks/<check_id>/overlay.png")
     def png_report(panel_id, check_id):
         result = library.check(panel_id, check_id)
-        image = photo.display(library.source(result))
-        return send_file(BytesIO(photo.png(output.overlay(image, result))), mimetype="image/png",
+        if result["mode"] == "crosscheck":
+            companion_panel = library.panel(result["companion_id"])
+            primary = photo.display(library.source(result))
+            companion = photo.display(library.source(companion_panel))
+            image = output.crosscheck_overlay(primary, companion, result)
+        else:
+            image = output.overlay(photo.display(library.source(result)), result)
+        return send_file(BytesIO(photo.png(image)), mimetype="image/png",
                          download_name=f'groove-{result["mode"]}.png', as_attachment=True, max_age=0)
 
     app.register_blueprint(api)

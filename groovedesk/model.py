@@ -90,3 +90,12 @@ def mode(value):
     if not isinstance(value, str) or value not in MODES:
         raise Invalid("请选择一种检查。")
     return value
+
+
+def crosscheck(value):
+    item = object_value(value)
+    chosen = settings(item.get("settings", {}), DEFAULTS)
+    mark_id = text_value(item.get("mark"), "标记编号")
+    if not any(mark["id"] == mark_id for mark in chosen["marks"]):
+        raise Invalid("请先在表面标记中选择这条标记。")
+    return {"settings": chosen, "mark": mark_id}

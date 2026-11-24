@@ -25,7 +25,13 @@
       <div id="empty" class="empty"><div class="empty-record"></div><h2>打开一张盘面照片</h2><p>导入原片，或载入合成练习唱片查看流程。</p></div>
       <div id="desk" hidden>
         <div class="canvas-area">
-          <div class="canvas-caption">原片 <output id="cursor">点选展开图或检查行定位</output></div>
+          <div class="canvas-caption">
+            <div id="view-switch" class="view-switch" hidden>
+              <button id="view-a" type="button">原片 A</button>
+              <button id="view-b" type="button">对照片 B</button>
+            </div>
+            <output id="cursor">点选展开图或检查行定位</output>
+          </div>
           <svg id="photo" role="img" aria-label="原始盘面与标定" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
         <div class="strip-area">
@@ -33,8 +39,13 @@
           <svg id="strip" viewBox="0 0 960 160" preserveAspectRatio="none" role="img" aria-label="唱片环区展开"></svg>
           <div id="axis" class="axis"></div>
         </div>
+        <section id="cross-narrative" class="cross-narrative" hidden>
+          <div class="narrative-head"><span id="cross-verdict" class="verdict"></span><span id="cross-coverage"></span></div>
+          <p id="cross-text"></p>
+          <p id="cross-default"></p>
+        </section>
         <section class="report">
-          <div class="report-top"><h2 id="result-heading"></h2><button id="save" class="primary">保存检查</button><button id="return-live" class="subtle" hidden>返回本次检查</button></div>
+          <div class="report-top"><h2 id="result-heading"></h2><button id="save" class="primary">保存检查</button><button id="back-surface" class="subtle" hidden>返回表面标记</button><button id="return-live" class="subtle" hidden>返回本次检查</button></div>
           <div id="downloads" hidden><a id="csv" download>下载 CSV</a><a id="overlay" download>下载原片标注</a><a id="strip-download" download>下载展开 PNG</a></div>
           <div class="results"><table><thead id="result-header"></thead><tbody id="result-rows"></tbody></table><p id="no-rows" hidden>当前没有标记。</p></div>
         </section>
@@ -57,6 +68,15 @@
         <div class="actions"><button id="refresh">更新展开</button><button id="retain">保留标定</button></div>
       </section>
       <section>
+        <h2>双片核对</h2>
+        <p id="pair-hint" class="side-hint">同面唱片、同盘心与零位标定的另一张光向照片。</p>
+        <div class="fields single">
+          <label>对照片<select id="companion"></select></label>
+        </div>
+        <div class="actions"><button id="apply-pair">设为对照片</button></div>
+        <p id="pair-status" class="side-hint"></p>
+      </section>
+      <section>
         <h2>检查</h2>
         <div id="modes" class="mode-list"></div>
         <div id="slice-controls" class="fields" hidden>
@@ -65,6 +85,9 @@
         </div>
         <div id="mark-controls" class="actions">
           <label class="sr-only" for="kind">标记类别</label><select id="kind"></select><button id="add-mark">添加标记</button>
+        </div>
+        <div id="cross-controls" class="actions" hidden>
+          <button id="run-cross" class="primary">用对照片核对选中标记</button>
         </div>
       </section>
       <p id="status" role="status" aria-live="polite"></p>
