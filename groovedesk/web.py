@@ -16,8 +16,8 @@ def payload():
     return model.object_value(request.get_json(silent=True))
 
 
-def make_result(library, panel, mode, settings):
-    return inspection.report(polar.open_disk(library.source(panel), settings), mode)
+def make_result(library, panel, mode, settings, target=None, anchor=None):
+    return inspection.report(polar.open_disk(library.source(panel), settings), mode, target, anchor)
 
 
 def install(app, path):
@@ -97,11 +97,18 @@ def install(app, path):
         value = payload()
         panel = library.panel(panel_id)
         chosen = model.settings(value.get("settings", {}), panel["settings"])
-        return jsonify(make_result(library, panel, model.mode(value.get("mode")), chosen))
+        mode = model.mode(value.get("mode"))
+        target = value.get("target")
+        anchor = value.get("anchor")
+        if mode == "bands":
+            target = model.numeric(target if target is not None else chosen["inner"], "目标半径", 0.02, 0.9)
+            anchor = model.numeric(anchor if anchor is not None else 0.0, "锚定方向", 0, 360)
+        return jsonify(make_result(library, panel, mode, chosen, target, anchor))
 
     def strip_file(panel, settings, start, sweep, download=False):
         disk = polar.open_disk(library.source(panel), settings)
-        payload = photo.png(polar.unroll(disk, start, sweep))
+        radial_bounds = inspection.band_bounds(settings) if sweep < 360 else None
+        payload = photo.png(polar.unroll(disk, start, sweep, radial_bounds=radial_bounds))
         return send_file(BytesIO(payload), mimetype="image/png", download_name="groove-strip.png",
                          as_attachment=download, max_age=0)
 
@@ -128,7 +135,12 @@ def install(app, path):
         revision = value.get("revision")
         library.require_revision(panel, revision)
         settings = model.settings(value.get("settings", {}), panel["settings"])
-        result = make_result(library, panel, model.mode(value.get("mode")), settings)
+        mode = model.mode(value.get("mode"))
+        target = anchor = None
+        if mode == "bands":
+            target = model.numeric(value.get("target", settings["inner"]), "目标半径", 0.02, 0.9)
+            anchor = model.numeric(value.get("anchor", 0.0), "锚定方向", 0, 360)
+        result = make_result(library, panel, mode, settings, target, anchor)
         current, saved = library.retain(panel_id, revision, result)
         return jsonify(panel=current, check=saved), 201
 

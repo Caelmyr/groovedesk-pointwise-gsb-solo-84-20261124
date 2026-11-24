@@ -59,10 +59,14 @@ def angles(start, sweep, count):
     return start + np.arange(count) * sweep / count
 
 
-def unroll(disk, start=0, sweep=360, width=WIDTH):
+def unroll(disk, start=0, sweep=360, width=WIDTH, radial_bounds=None):
     settings = disk.settings
+    if radial_bounds is None:
+        outer, inner = settings["outer"], settings["inner"]
+    else:
+        outer, inner = radial_bounds
     samples, valid = disk.sample(angles(settings["phase"] + start, sweep, width),
-                                 np.linspace(settings["outer"], settings["inner"], HEIGHT))
+                                 np.linspace(outer, inner, HEIGHT))
     pixels = np.rint(np.clip(samples, 0, 1) * 255).astype(np.uint8)
     if pixels.ndim == 2:
         pixels = np.repeat(pixels[..., None], 3, axis=2)

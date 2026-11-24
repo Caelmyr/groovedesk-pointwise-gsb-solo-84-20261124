@@ -11,11 +11,14 @@ MODES = {
     "lighting": "照明巡检",
     "rim": "盘缘读数",
     "grooves": "径向纹理",
+    "bands": "分带线核对",
     "slice": "角度切片",
 }
 MARKS = {"scratch": "擦伤", "chip": "磕口", "reference": "参照", "dust": "颗粒"}
 DEFAULTS = {"center": [0.5, 0.5], "inner": 0.23, "outer": 0.46, "phase": 0.0,
-            "diameter": 300.0, "angle": 45.0, "span": 30.0, "marks": []}
+            "diameter": 300.0, "angle": 45.0, "span": 30.0, "marks": [],
+            "band_inner": None, "band_outer": None,
+            "band_inner_missing": False, "band_outer_missing": False}
 
 
 def object_value(value):
@@ -66,6 +69,12 @@ def mark_list(values):
     return marks
 
 
+def optional_radius(value, label):
+    if value is None:
+        return None
+    return numeric(value, label, 0.02, 0.9)
+
+
 def settings(value, fallback):
     chosen = {**fallback, **object_value(value)}
     center = chosen["center"]
@@ -75,6 +84,19 @@ def settings(value, fallback):
     outer = numeric(chosen["outer"], "外半径", 0.04, 0.9)
     if outer - inner < 0.02:
         raise Invalid("内外半径间距太小。")
+    band_inner = optional_radius(chosen.get("band_inner"), "分带内边界半径")
+    band_outer = optional_radius(chosen.get("band_outer"), "分带外边界半径")
+    band_inner_missing = bool(chosen.get("band_inner_missing", False))
+    band_outer_missing = bool(chosen.get("band_outer_missing", False))
+    if not isinstance(chosen.get("band_inner_missing", False), bool) \
+            or not isinstance(chosen.get("band_outer_missing", False), bool):
+        raise Invalid("缺边标记应为布尔值。")
+    if band_inner is not None and not inner <= band_inner < outer:
+        raise Invalid("分带内边界应落在当前环区之内。")
+    if band_outer is not None and not inner < band_outer <= outer:
+        raise Invalid("分带外边界应落在当前环区之内。")
+    if band_inner is not None and band_outer is not None and band_outer - band_inner < 0.002:
+        raise Invalid("两道分带边界间距太小。")
     return {
         "center": [numeric(axis, "盘心", 0, 1) for axis in center],
         "inner": inner, "outer": outer,
@@ -83,6 +105,9 @@ def settings(value, fallback):
         "angle": numeric(chosen["angle"], "切片起角", 0, 360) % 360,
         "span": numeric(chosen["span"], "切片角宽", 1, 180),
         "marks": mark_list(chosen["marks"]),
+        "band_inner": band_inner, "band_outer": band_outer,
+        "band_inner_missing": band_inner_missing,
+        "band_outer_missing": band_outer_missing,
     }
 
 

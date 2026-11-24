@@ -63,6 +63,14 @@
           <label>切片起角 °<input type="number" id="angle" min="0" max="360" step="1"></label>
           <label>切片角宽 °<input type="number" id="span" min="1" max="180" step="1"></label>
         </div>
+        <div id="band-controls" hidden>
+          <p class="control-note">在展开图或径向纹理行点选想看的那段沟纹，再用八个相隔方向核对同半径分带线。</p>
+          <div class="actions">
+            <button id="band-pick" type="button">从展开图拾取沟纹</button>
+            <button id="band-apply" type="button" class="primary">采用默认边界并切片</button>
+          </div>
+          <p id="band-summary" class="control-note"></p>
+        </div>
         <div id="mark-controls" class="actions">
           <label class="sr-only" for="kind">标记类别</label><select id="kind"></select><button id="add-mark">添加标记</button>
         </div>

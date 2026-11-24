@@ -2,7 +2,8 @@
 
 const $ = id => document.getElementById(id);
 const state = {config: null, panel: null, draft: null, result: null, archive: null,
-  mode: 'surface', tool: null, markStart: null, cursor: null, selection: null, stripUrl: null};
+  mode: 'surface', tool: null, markStart: null, cursor: null, selection: null, stripUrl: null,
+  bandTarget: null, bandAnchor: 0, bandPicking: false};
 const apiRoot = '/groove';
 const fieldNames = ['inner', 'outer', 'phase', 'diameter', 'angle', 'span'];
 const TAU = 2 * Math.PI;
@@ -107,6 +108,37 @@ function drawPhoto() {
   const [x2, y2] = sourcePoint(settings.phase, settings.outer, settings);
   nodes.push(graphic('line', {x1: cx, y1: cy, x2, y2, stroke: '#7de1b5', 'stroke-width': 1.2, 'stroke-dasharray': '7 5',
     'vector-effect': 'non-scaling-stroke'}));
+  const report = state.archive || state.result;
+  if (report?.mode === 'bands') {
+    const purple = '#b097ff';
+    for (const row of report.direction_rows) {
+      const [dx, dy] = row.point;
+      nodes.push(graphic('line', {x1: cx, y1: cy, x2: dx, y2: dy, stroke: purple, 'stroke-width': .8,
+        'stroke-dasharray': '3 6', 'vector-effect': 'non-scaling-stroke'}));
+    }
+    const boundaryBySide = {};
+    for (const row of report.boundary_rows) boundaryBySide[row.side] = row;
+    const ringDefs = [
+      ['band_inner', '内边界', settings.inner, settings.band_inner_missing],
+      ['band_outer', '外边界', settings.outer, settings.band_outer_missing],
+    ];
+    for (const [key, side, fallbackRadius, missingFlag] of ringDefs) {
+      const chosen = settings[key];
+      const detected = boundaryBySide[side];
+      const radius = chosen ?? (detected?.radius !== null && detected?.radius !== undefined
+        ? detected.radius / radiusUnit() : fallbackRadius);
+      const missing = missingFlag || detected?.radius === null || detected?.radius === undefined;
+      if (radius === null || radius === undefined) continue;
+      nodes.push(graphic('circle', {cx, cy, r: radius * radiusUnit(), fill: 'none',
+        stroke: missing ? '#ff8f6f' : '#ffbd76', 'stroke-width': 1.6,
+        'stroke-dasharray': key === 'band_inner' ? '6 5' : '0', 'vector-effect': 'non-scaling-stroke'}));
+    }
+    if (state.bandTarget !== null) {
+      const [tx, ty] = sourcePoint(settings.phase + state.bandAnchor, state.bandTarget, settings);
+      nodes.push(graphic('circle', {cx: tx, cy: ty, r: Math.max(3.5, radiusUnit() / 70), fill: 'none',
+        stroke: '#ffbd76', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke'}));
+    }
+  }
   nodes.push(graphic('circle', {cx, cy, r: Math.max(2, radiusUnit() / 120), fill: 'none', stroke: '#7de1b5',
     'vector-effect': 'non-scaling-stroke'}));
   const selected = (state.archive || state.result)?.rows[state.selection];
@@ -138,6 +170,19 @@ function stripRange() {
   return visible.mode === 'slice' ? [settings.angle, settings.span] : [0, 360];
 }
 
+function radialBounds(settings) {
+  const inner = settings.band_inner === null || settings.band_inner === undefined
+    ? settings.inner : settings.band_inner;
+  const outer = settings.band_outer === null || settings.band_outer === undefined
+    ? settings.outer : settings.band_outer;
+  return [inner, outer];
+}
+
+function radiusAtY(y, settings) {
+  const [inner, outer] = radialBounds(settings);
+  return outer - y / 160 * (outer - inner);
+}
+
 function drawStrip() {
   const result = state.archive || state.result;
   if (!result || !state.stripUrl) return;
@@ -166,43 +211,83 @@ function drawStrip() {
     nodes.push(graphic('circle', {cx: state.markStart[0], cy: state.markStart[1], r: 5, fill: '#ffbd76'}));
   }
   svg.replaceChildren(...nodes);
-  svg.classList.toggle('choosing', state.tool === 'mark');
+  svg.classList.toggle('choosing', state.tool === 'mark' || state.bandPicking);
   $('strip-title').textContent = result.mode === 'slice' ? '角度切片' : '圆周展开';
   const [start, sweep] = stripRange();
   $('axis').replaceChildren(...[0, .25, .5, .75, 1].map(part =>
     element('span', `${Number((start + sweep * part).toFixed(1))}°`)));
   $('strip-help').textContent = state.tool === 'mark'
     ? (state.markStart ? '点击另一个角完成标记' : '点击标记的第一个角')
+    : state.bandPicking ? '点击要看的那段沟纹，按其半径开始八方向核对'
     : '外圈在上 · 点击回到原片';
 }
 
-function focusRow(index) {
+function focusRow(index, rows, rowNode) {
+  const report = state.archive || state.result;
+  const source = rows || report.rows;
   state.selection = index;
-  state.cursor = (state.archive || state.result).rows[index].point;
+  state.cursor = source[index].point;
   drawPhoto();
   drawStrip();
-  $('result-rows').querySelectorAll('tr').forEach((row, i) => row.classList.toggle('selected', i === index));
+  $('result-rows').querySelectorAll('tbody tr').forEach(row => row.classList.remove('selected'));
+  if (rowNode) rowNode.classList.add('selected');
+}
+
+function buildTable(columns, rows, selectable, sourceRows) {
+  const table = element('table');
+  const head = element('thead');
+  const headRow = element('tr');
+  headRow.append(...columns.map(col => element('th', col.title)));
+  head.append(headRow);
+  const body = element('tbody');
+  body.append(...rows.map((item, index) => {
+    const rowNode = element('tr', null, selectable ? {tabindex: 0, 'data-row': index} : {});
+    rowNode.append(...columns.map(col => element('td', format(item[col.key]))));
+    if (selectable) {
+      rowNode.onclick = () => focusRow(index, sourceRows || rows, rowNode);
+      rowNode.onkeydown = event => {
+        if (event.target === rowNode && ['Enter', ' '].includes(event.key)) {
+          event.preventDefault();
+          focusRow(index, sourceRows || rows, rowNode);
+        }
+      };
+    }
+    return rowNode;
+  }));
+  table.append(head, body);
+  return table;
 }
 
 function drawRows() {
   const report = state.archive || state.result;
+  const holder = $('result-rows');
+  $('result-header').replaceChildren();
+  $('result-heading').textContent = report.heading;
+  $('no-rows').hidden = !!report.rows.length || report.mode === 'bands';
+  holder.replaceChildren();
+  if (report.mode === 'bands') {
+    const sections = [
+      ['默认边界对', report.boundary_columns, report.boundary_rows, false, null],
+      ['同半径候选分带线', report.columns, report.rows, true, null],
+      ['八方向核对证据', report.direction_columns, report.direction_rows, true, report.direction_rows],
+    ];
+    for (const [title, columns, rows, selectable, sourceRows] of sections) {
+      const block = element('div', null, {class: 'band-table'});
+      block.append(element('h3', title));
+      block.append(buildTable(columns, rows, selectable, sourceRows));
+      holder.append(block);
+    }
+    return;
+  }
   const row = element('tr');
   row.append(...report.columns.map(col => element('th', col.title)));
   if (!state.archive && report.mode === 'surface') row.append(element('th', '标记操作'));
   $('result-header').replaceChildren(row);
-  $('result-heading').textContent = report.heading;
-  $('no-rows').hidden = !!report.rows.length;
-  $('result-rows').replaceChildren(...report.rows.map((item, index) => {
-    const row = element('tr', null, {tabindex: 0, 'data-row': index});
-    row.append(...report.columns.map(col => element('td', format(item[col.key]))));
-    row.onclick = () => focusRow(index);
-    row.onkeydown = event => {
-      if (event.target === row && ['Enter', ' '].includes(event.key)) {
-        event.preventDefault();
-        focusRow(index);
-      }
-    };
-    if (!state.archive && report.mode === 'surface') {
+  const table = buildTable(report.columns, report.rows, true);
+  holder.append(table);
+  if (!state.archive && report.mode === 'surface') {
+    table.querySelectorAll('tbody tr').forEach((rowNode, index) => {
+      const item = report.rows[index];
       const cell = element('td');
       const remove = element('button', '移除', {'aria-label': '移除 ' + item.id});
       remove.onclick = action(async event => {
@@ -213,10 +298,9 @@ function drawRows() {
         tell('已从本次检查移除标记');
       });
       cell.append(remove);
-      row.append(cell);
-    }
-    return row;
-  }));
+      rowNode.append(cell);
+    });
+  }
 }
 
 function drawMenu(items, nav, empty, create) {
@@ -256,8 +340,10 @@ function drawMode() {
   $('downloads').hidden = !state.archive;
   $('mark-controls').hidden = mode !== 'surface';
   $('slice-controls').hidden = mode !== 'slice';
+  $('band-controls').hidden = mode !== 'bands';
   $('modes').querySelectorAll('button').forEach(node => node.setAttribute('aria-pressed', node.dataset.mode === mode));
   for (const node of document.querySelectorAll('[data-tool]')) node.setAttribute('aria-pressed', node.dataset.tool === state.tool);
+  $('strip').classList.toggle('choosing', state.tool === 'mark' || state.bandPicking);
 }
 
 async function loadStrip(settings, mode) {
@@ -267,7 +353,12 @@ async function loadStrip(settings, mode) {
 }
 
 async function inspect() {
-  const record = await api(panelPath() + '/preview', 'POST', {settings: state.draft, mode: state.mode});
+  const body = {settings: state.draft, mode: state.mode};
+  if (state.mode === 'bands' && state.bandTarget !== null) {
+    body.target = state.bandTarget;
+    body.anchor = state.bandAnchor;
+  }
+  const record = await api(panelPath() + '/preview', 'POST', body);
   await loadStrip(record.settings, record.mode);
   state.result = record;
   state.draft = structuredClone(record.settings);
@@ -282,6 +373,7 @@ async function inspect() {
   drawStrip();
   drawRows();
   drawArchive();
+  drawBandPanel();
 }
 
 async function openPanel(id) {
@@ -291,6 +383,9 @@ async function openPanel(id) {
   state.mode = 'surface';
   state.result = null;
   state.archive = null;
+  state.bandTarget = null;
+  state.bandAnchor = 0;
+  state.bandPicking = false;
   localStorage.setItem('groovedesk-panel', id);
   $('title').textContent = record.title;
   $('file-info').textContent = `${record.filename} · ${record.width} × ${record.height} px`;
@@ -308,6 +403,9 @@ async function showArchive(record) {
   state.selection = null;
   state.tool = null;
   state.markStart = null;
+  state.bandPicking = false;
+  state.bandTarget = record.mode === 'bands' ? record.detection.target : null;
+  state.bandAnchor = record.mode === 'bands' ? record.detection.anchor : 0;
   const root = apiRoot + panelPath() + '/checks/' + record.id;
   $('csv').href = root + '/report.csv';
   $('overlay').href = root + '/overlay.png';
@@ -317,6 +415,7 @@ async function showArchive(record) {
   drawPhoto();
   drawStrip();
   drawRows();
+  drawBandPanel();
 }
 
 async function openArchive(id) {
@@ -333,6 +432,39 @@ function pickTool(tool) {
   drawMode();
   drawPhoto();
   drawStrip();
+}
+
+function drawBandPanel() {
+  const summary = $('band-summary');
+  if (!summary) return;
+  const report = state.archive || state.result;
+  if (!report || report.mode !== 'bands') {
+    summary.textContent = '';
+    return;
+  }
+  const detection = report.detection;
+  const fmt = line => line ? `${(line.radius * radiusUnit()).toFixed(1)} px · ${line.support} 方向` : '缺边';
+  summary.textContent = `目标沟纹 ${(detection.target * radiusUnit()).toFixed(1)} px（锚定 ${detection.anchor}°）｜内：${fmt(detection.inner_line)}｜外：${fmt(detection.outer_line)}`;
+}
+
+async function applyBandBoundaries() {
+  applyFields();
+  const report = state.result;
+  if (!report || report.mode !== 'bands') throw Error('请先运行分带线核对。');
+  const detection = report.detection;
+  const settings = state.draft;
+  settings.band_inner = detection.inner_line ? detection.inner_line.radius : settings.inner;
+  settings.band_outer = detection.outer_line ? detection.outer_line.radius : settings.outer;
+  settings.band_inner_missing = detection.inner_line === null;
+  settings.band_outer_missing = detection.outer_line === null;
+  settings.angle = Math.round(state.bandAnchor || 0);
+  state.mode = 'slice';
+  state.bandPicking = false;
+  await inspect();
+  const missing = [];
+  if (settings.band_inner_missing) missing.push('内侧缺边，已沿用环区内圈');
+  if (settings.band_outer_missing) missing.push('外侧缺边，已沿用环区外圈');
+  tell('已采用默认边界对并生成角度切片。' + (missing.length ? '（' + missing.join('；') + '）' : ''));
 }
 
 $('photo').onclick = action(async event => {
@@ -357,7 +489,6 @@ $('strip').onclick = action(async event => {
   const settings = (state.archive || state.result).settings;
   if (!point || point[0] < 0 || point[1] < 0 || point[0] >= 960 || point[1] >= 160) return;
   const angleAt = x => settings.phase + stripRange()[0] + x / 960 * stripRange()[1];
-  const radiusAt = y => settings.outer - y / 160 * (settings.outer - settings.inner);
   if (state.tool === 'mark' && !state.archive) {
     if (!state.markStart) {
       state.markStart = point;
@@ -365,7 +496,7 @@ $('strip').onclick = action(async event => {
       return;
     }
     const [a, b] = [angleAt(state.markStart[0]), angleAt(point[0])].sort((a, b) => a - b);
-    const [inner, outer] = [radiusAt(state.markStart[1]), radiusAt(point[1])].sort((a, b) => a - b);
+    const [inner, outer] = [radiusAtY(state.markStart[1], settings), radiusAtY(point[1], settings)].sort((a, b) => a - b);
     const span = b - a;
     if (span < .1 || span > 180 || outer - inner < .001) {
       state.markStart = null;
@@ -381,8 +512,18 @@ $('strip').onclick = action(async event => {
     tell('已添加标记，保留标定后可继续编辑。');
     return;
   }
+  if (state.bandPicking && !state.archive) {
+    applyFields();
+    state.bandTarget = radiusAtY(point[1], settings);
+    state.bandAnchor = normalAngle(angleAt(point[0]) - settings.phase);
+    state.bandPicking = false;
+    state.mode = 'bands';
+    await inspect();
+    tell(`已拾取沟纹半径 ${(state.bandTarget * radiusUnit()).toFixed(1)} px，开始八方向核对。`);
+    return;
+  }
   state.selection = null;
-  state.cursor = sourcePoint(angleAt(point[0]), radiusAt(point[1]), settings);
+  state.cursor = sourcePoint(angleAt(point[0]), radiusAtY(point[1], settings), settings);
   drawPhoto();
   drawStrip();
   $('result-rows').querySelectorAll('tr').forEach(row => row.classList.remove('selected'));
@@ -406,6 +547,18 @@ $('file').onchange = action(async event => {
 });
 for (const node of document.querySelectorAll('[data-tool]')) node.onclick = action(() => pickTool(node.dataset.tool));
 $('add-mark').onclick = action(() => pickTool('mark'));
+$('band-pick').onclick = action(async () => {
+  applyFields();
+  const willPick = !state.bandPicking;
+  state.tool = null;
+  state.mode = 'bands';
+  if (state.bandTarget === null) state.bandTarget = (state.draft.inner + state.draft.outer) / 2;
+  await inspect();
+  state.bandPicking = willPick;
+  drawMode();
+  drawStrip();
+  tell(state.bandPicking ? '请在展开图上点选想看的那段沟纹。' : '已取消拾取，可用默认目标半径重新核对。');});
+$('band-apply').onclick = action(applyBandBoundaries);
 $('refresh').onclick = action(async () => {
   applyFields();
   await inspect();
@@ -420,8 +573,12 @@ $('retain').onclick = action(async () => {
 });
 $('save').onclick = action(async () => {
   applyFields();
-  const saved = await api(panelPath() + '/checks', 'POST', {
-    settings: state.draft, mode: state.mode, revision: state.panel.revision});
+  const body = {settings: state.draft, mode: state.mode, revision: state.panel.revision};
+  if (state.mode === 'bands' && state.bandTarget !== null) {
+    body.target = state.bandTarget;
+    body.anchor = state.bandAnchor;
+  }
+  const saved = await api(panelPath() + '/checks', 'POST', body);
   state.panel = saved.panel;
   await showArchive(saved.check);
 });
@@ -434,6 +591,10 @@ action(async () => {
     node.onclick = action(async () => {
       applyFields();
       state.mode = mode;
+      state.bandPicking = false;
+      if (mode === 'bands' && state.bandTarget === null) {
+        state.bandTarget = (state.draft.inner + state.draft.outer) / 2;
+      }
       await inspect();
       tell(label + '已更新');
     });

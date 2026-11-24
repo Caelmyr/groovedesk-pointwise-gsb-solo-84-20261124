@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from . import model, polar
+from . import bands as banding, model, polar
 
 
 def luminance(samples):
@@ -21,6 +21,13 @@ def digits(value):
 
 def visible_point(disk, angle, radius):
     return disk.point(angle, radius)
+
+
+def band_bounds(settings):
+    """Effective slice radii: chosen band pair, falling back to the ring edges."""
+    inner = settings["band_inner"] if settings["band_inner"] is not None else settings["inner"]
+    outer = settings["band_outer"] if settings["band_outer"] is not None else settings["outer"]
+    return inner, outer
 
 
 def surface(disk):
@@ -108,16 +115,74 @@ def grooves(disk):
     return [column("半径 px", "radius"), column("相邻径向变化 %", "response"), column("入画 %", "valid")], rows
 
 
+def band_report(disk, target, anchor):
+    settings = disk.settings
+    found = banding.detect(disk, target, anchor)
+    phase = settings["phase"]
+
+    def line_point(line):
+        return visible_point(disk, phase + found["anchor"], line["radius"]) if line else None
+
+    rows = []
+    for line in found["candidates"]:
+        rows.append({
+            "radius": digits(line["radius"] * disk.unit),
+            "radius_norm": line["radius"],
+            "support": line["support"], "span": line["span"],
+            "prominence": digits(line["prominence"] * 100),
+            "verdict": "完整" if line["reliable"] else "窄线/不完整",
+            "directions": "、".join(str(index * 360 // banding.DIRECTION_COUNT) + "°"
+                                    for index in line["directions"]),
+            "point": visible_point(disk, phase + (line["angles"][0] if line["angles"] else 0), line["radius"]),
+        })
+    direction_rows = []
+    for item in found["directions"]:
+        peak_text = "；".join(f'{digits(peak["radius"] * disk.unit)}px' for peak in item["peaks"]) or "无达阈值峰"
+        direction_rows.append({
+            "direction": item["angle"], "coverage": item["coverage"],
+            "threshold": digits(item["threshold"] * 100), "peaks": peak_text,
+            "point": item["point"],
+        })
+    inner_line, outer_line = found["inner_line"], found["outer_line"]
+    boundary_rows = [
+        {"side": "内边界", "radius": digits(inner_line["radius"] * disk.unit) if inner_line else None,
+         "support": inner_line["support"] if inner_line else 0,
+         "missing": settings["band_inner_missing"], "note": found["inner_note"],
+         "point": line_point(inner_line)},
+        {"side": "外边界", "radius": digits(outer_line["radius"] * disk.unit) if outer_line else None,
+         "support": outer_line["support"] if outer_line else 0,
+         "missing": settings["band_outer_missing"], "note": found["outer_note"],
+         "point": line_point(outer_line)},
+    ]
+    columns = [column("候选半径 px", "radius"), column("支持方向数", "support"),
+               column("角覆盖 °", "span"), column("峰强度 %", "prominence"),
+               column("判定", "verdict"), column("出现方向", "directions")]
+    direction_columns = [column("核对方向 °", "direction"), column("入画 %", "coverage"),
+                         column("阈值 %", "threshold"), column("该方向峰位", "peaks")]
+    boundary_columns = [column("边界", "side"), column("采用半径 px", "radius"),
+                        column("支持方向数", "support"), column("缺边", "missing"), column("判断依据", "note")]
+    return {
+        "mode": "bands", "heading": model.MODES["bands"],
+        "columns": columns, "rows": rows,
+        "direction_columns": direction_columns, "direction_rows": direction_rows,
+        "boundary_columns": boundary_columns, "boundary_rows": boundary_rows,
+        "detection": found,
+        "settings": disk.settings, "width": disk.width, "height": disk.height,
+        "source_space": "oriented_original_pixels",
+    }
+
+
 def slice_report(disk):
     settings = disk.settings
     start = settings["phase"] + settings["angle"]
     center = start + settings["span"] / 2
+    bound_inner, bound_outer = band_bounds(settings)
     samples, valid = disk.sample(polar.angles(start, settings["span"], 240),
-                                 np.linspace(settings["inner"], settings["outer"], 90))
+                                 np.linspace(bound_inner, bound_outer, 90))
     observed = luminance(samples)[valid]
     row = {"start": settings["angle"], "sweep": settings["span"], "valid": digits(valid.mean() * 100),
            "light": digits(observed.mean() * 100) if len(observed) else None,
-           "point": visible_point(disk, center, (settings["inner"] + settings["outer"]) / 2)}
+           "point": visible_point(disk, center, (bound_inner + bound_outer) / 2)}
     return [column("起角 °", "start"), column("角宽 °", "sweep"),
             column("入画 %", "valid"), column("平均光度 %", "light")], [row]
 
@@ -125,7 +190,11 @@ def slice_report(disk):
 READERS = {"surface": surface, "lighting": lighting, "rim": rim, "grooves": grooves, "slice": slice_report}
 
 
-def report(disk, mode):
+def report(disk, mode, target=None, anchor=None):
+    if mode == "bands":
+        if target is None:
+            target = (disk.settings["inner"] + disk.settings["outer"]) / 2
+        return band_report(disk, float(target), float(anchor if anchor is not None else 0.0))
     columns, rows = READERS[mode](disk)
     return {"mode": mode, "heading": model.MODES[mode], "columns": columns, "rows": rows,
             "settings": disk.settings, "width": disk.width, "height": disk.height,

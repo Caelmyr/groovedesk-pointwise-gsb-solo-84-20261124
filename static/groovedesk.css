@@ -88,6 +88,11 @@ tr[data-row]:hover { background: #edf1e8; }
 #status[data-error="true"] { color: #9a422f; }
 .actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .mode-list { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+.control-note { color: var(--muted); font-size: 12px; line-height: 1.55; margin: 8px 0; }
+.band-table { border-top: 1px solid var(--line); padding: 4px 0 8px; }
+.band-table h3 { font-size: 12.5px; color: #4f5b4e; margin: 8px 14px 4px; }
+.band-table table { white-space: normal; }
+.band-table td, .band-table th { padding: 6px 10px; font-size: 12px; }
 @media (max-width: 1050px) {
   main { grid-template-columns: 155px minmax(300px, 1fr) 236px; }
   .workspace { padding-left: 14px; padding-right: 14px; }
