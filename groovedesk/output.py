@@ -31,6 +31,9 @@ def overlay(image, result):
     unit = min(image.width - 1, image.height - 1)
     green = (102, 224, 183)
     orange = (255, 184, 106)
+    cyan = (124, 214, 225)
+    yellow = (255, 217, 102)
+    red = (255, 122, 122)
     for boundary in ("inner", "outer"):
         radius = settings[boundary] * unit
         brush.ellipse((cx - radius, cy - radius, cx + radius, cy + radius), outline=green, width=2)
@@ -39,5 +42,18 @@ def overlay(image, result):
     brush.line(((cx, cy), (cx + radius * sin(angle), cy - radius * cos(angle))), fill=green, width=2)
     for row in result["rows"]:
         x, y = row["point"]
-        brush.ellipse((x - 3, y - 3, x + 3, y + 3), outline=orange, width=2)
+        color = cyan if row.get("reference") else orange
+        brush.ellipse((x - 3, y - 3, x + 3, y + 3), outline=color, width=2)
+    assessment = result.get("assessment")
+    if assessment:
+        if assessment.get("edge"):
+            points = []
+            for rel, fraction in assessment["edge"]:
+                theta = radians(settings["phase"] + rel)
+                points.append((cx + unit * fraction * sin(theta), cy - unit * fraction * cos(theta)))
+            brush.line(points, fill=yellow, width=3, joint="curve")
+        if assessment.get("deepest_point"):
+            x, y = assessment["deepest_point"]
+            brush.line(((x - 6, y), (x + 6, y)), fill=red, width=2)
+            brush.line(((x, y - 6), (x, y + 6)), fill=red, width=2)
     return image

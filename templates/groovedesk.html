@@ -36,6 +36,7 @@
         <section class="report">
           <div class="report-top"><h2 id="result-heading"></h2><button id="save" class="primary">保存检查</button><button id="return-live" class="subtle" hidden>返回本次检查</button></div>
           <div id="downloads" hidden><a id="csv" download>下载 CSV</a><a id="overlay" download>下载原片标注</a><a id="strip-download" download>下载展开 PNG</a></div>
+          <div id="assessment" class="assessment" hidden></div>
           <div class="results"><table><thead id="result-header"></thead><tbody id="result-rows"></tbody></table><p id="no-rows" hidden>当前没有标记。</p></div>
         </section>
       </div>
@@ -62,6 +63,10 @@
         <div id="slice-controls" class="fields" hidden>
           <label>切片起角 °<input type="number" id="angle" min="0" max="360" step="1"></label>
           <label>切片角宽 °<input type="number" id="span" min="1" max="180" step="1"></label>
+        </div>
+        <div id="chip-controls" class="fields" hidden>
+          <label>磕口参照<select id="chip"></select></label>
+          <p class="field-hint">用磕口两侧实际盘缘估计被磕掉之前的边。</p>
         </div>
         <div id="mark-controls" class="actions">
           <label class="sr-only" for="kind">标记类别</label><select id="kind"></select><button id="add-mark">添加标记</button>

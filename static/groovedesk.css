@@ -68,6 +68,14 @@ nav button .detail { display: block; color: var(--muted); font-weight: normal; m
 .report-top { padding: 13px 15px; }
 .report-top h2 { margin: 0; }
 #downloads { display: flex; flex-wrap: wrap; gap: 14px; padding: 0 15px 12px; }
+.assessment { padding: 10px 15px 12px; border-top: 1px solid var(--line); background: #f6f3ea; display: grid; gap: 5px; font-size: 13px; }
+.assessment .summary { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: baseline; }
+.assessment .depth { font-weight: 700; color: var(--accent); }
+.assessment .depth.empty { color: #9a422f; }
+.assessment .detail { color: var(--muted); font-size: 12px; }
+.assessment .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--muted); font-size: 11px; }
+.assessment .legend span { display: inline-flex; align-items: center; gap: 5px; }
+.assessment .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
 .results { overflow: auto; max-height: 290px; }
 .results p { padding: 12px 15px; color: var(--muted); }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -75,10 +83,15 @@ th, td { text-align: left; border-top: 1px solid var(--line); padding: 8px 14px;
 th { position: sticky; top: 0; background: #eeeee3; font-size: 11px; color: #4f5b4e; }
 td button { padding: 3px 7px; }
 tr.selected { background: var(--accent-soft); }
+tr.reference td { background: #eef5f4; }
+tr.reference.selected td, tr.selected td { background: var(--accent-soft); }
 tr[data-row] { cursor: pointer; }
 tr[data-row]:hover { background: #edf1e8; }
 .controls section + section { border-top: 1px solid var(--line); margin-top: 23px; padding-top: 21px; }
 .tool-grid, .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#chip-controls { grid-template-columns: 1fr; }
+.controls label select { display: block; width: 100%; margin-top: 4px; padding: 7px 8px; }
+.field-hint { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; }
 .controls label { display: block; color: var(--muted); font-size: 12px; }
 .controls label input {
   border: 1px solid #d5d4c7; border-radius: 6px; background: var(--paper); color: var(--ink);

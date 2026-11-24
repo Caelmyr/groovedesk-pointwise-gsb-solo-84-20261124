@@ -15,7 +15,7 @@ MODES = {
 }
 MARKS = {"scratch": "擦伤", "chip": "磕口", "reference": "参照", "dust": "颗粒"}
 DEFAULTS = {"center": [0.5, 0.5], "inner": 0.23, "outer": 0.46, "phase": 0.0,
-            "diameter": 300.0, "angle": 45.0, "span": 30.0, "marks": []}
+            "diameter": 300.0, "angle": 45.0, "span": 30.0, "marks": [], "chip": None}
 
 
 def object_value(value):
@@ -75,6 +75,13 @@ def settings(value, fallback):
     outer = numeric(chosen["outer"], "外半径", 0.04, 0.9)
     if outer - inner < 0.02:
         raise Invalid("内外半径间距太小。")
+    marks = mark_list(chosen["marks"])
+    chip = chosen.get("chip")
+    if chip is not None:
+        if not isinstance(chip, str):
+            raise Invalid("请选择已标注的磕口。")
+        if not any(mark["id"] == chip and mark["kind"] == "chip" for mark in marks):
+            chip = None
     return {
         "center": [numeric(axis, "盘心", 0, 1) for axis in center],
         "inner": inner, "outer": outer,
@@ -82,7 +89,8 @@ def settings(value, fallback):
         "diameter": numeric(chosen["diameter"], "外圈实测直径", 10, 1000),
         "angle": numeric(chosen["angle"], "切片起角", 0, 360) % 360,
         "span": numeric(chosen["span"], "切片角宽", 1, 180),
-        "marks": mark_list(chosen["marks"]),
+        "marks": marks,
+        "chip": chip,
     }
 
 

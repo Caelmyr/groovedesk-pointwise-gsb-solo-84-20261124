@@ -121,6 +121,33 @@ function drawPhoto() {
         stroke: '#ffbd76', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke'}));
     }
   }
+  const report = state.archive || state.result;
+  const info = report?.assessment;
+  if (info && report.mode === 'rim') {
+    const inChip = rel => normalAngle(rel - info.window[0]) <= info.window[1] - info.window[0];
+    for (const row of report.rows) {
+      if (row.reference) {
+        nodes.push(graphic('circle', {cx: row.point[0], cy: row.point[1], r: 3.4, fill: 'none',
+          stroke: '#7dd6e1', 'stroke-width': 1.7, 'vector-effect': 'non-scaling-stroke'}));
+      } else if (inChip(row.angle)) {
+        nodes.push(graphic('circle', {cx: row.point[0], cy: row.point[1], r: 2.6, fill: '#ffbd76'}));
+      }
+    }
+    if (info.edge.length) {
+      const d = info.edge.map(([rel, radius], k) => {
+        const [x, y] = sourcePoint(report.settings.phase + rel, radius, report.settings);
+        return `${k ? 'L' : 'M'} ${x} ${y}`;
+      }).join(' ');
+      nodes.push(graphic('path', {d, fill: 'none', stroke: '#ffd966', 'stroke-width': 2,
+        'stroke-dasharray': '6 4', 'vector-effect': 'non-scaling-stroke'}));
+    }
+    if (info.deepest_point) {
+      const [x, y] = info.deepest_point;
+      const r = 6;
+      nodes.push(graphic('path', {d: `M ${x-r} ${y} H ${x+r} M ${x} ${y-r} V ${y+r}`, fill: 'none',
+        stroke: '#ff7a7a', 'stroke-width': 2, 'vector-effect': 'non-scaling-stroke'}));
+    }
+  }
   if (state.cursor) {
     const [sx, sy] = state.cursor;
     const r = Math.max(3, radiusUnit() / 85);
@@ -162,6 +189,47 @@ function drawStrip() {
       }
     }
   }
+  const info = result.assessment;
+  if (info && result.mode === 'rim') {
+    const [start, sweep] = stripRange();
+    const sx = rel => normalAngle(rel - start) / sweep * 960;
+    const sy = fraction => 160 * (settings.outer - fraction) / (settings.outer - settings.inner);
+    const pathOf = points => points.map((point, k) => `${k ? 'L' : 'M'} ${point[0]} ${point[1]}`).join(' ');
+    const runs = [];
+    for (const row of result.rows) {
+      if (!row.reference) continue;
+      const point = [sx(row.angle), sy(row.radius / radiusUnit())];
+      const last = runs[runs.length - 1];
+      if (last && row.angle - last.angle <= 4.6) {
+        last.points.push(point);
+        last.angle = row.angle;
+      } else runs.push({angle: row.angle, points: [point]});
+    }
+    for (const run of runs) {
+      nodes.push(graphic('path', {d: pathOf(run.points), fill: 'none', stroke: '#7dd6e1',
+        'stroke-width': 2, 'vector-effect': 'non-scaling-stroke'}));
+    }
+    for (const row of result.rows) {
+      if (row.radius === null || row.radius === undefined) continue;
+      if (normalAngle(row.angle - info.window[0]) <= info.window[1] - info.window[0]) {
+        nodes.push(graphic('circle', {cx: sx(row.angle), cy: sy(row.radius / radiusUnit()), r: 2.2, fill: '#ffbd76'}));
+      }
+    }
+    if (info.edge.length) {
+      const segments = [[]];
+      for (const [rel, fraction] of info.edge) {
+        const point = [sx(rel), sy(fraction)];
+        const segment = segments[segments.length - 1];
+        if (segment.length && Math.abs(point[0] - segment[segment.length - 1][0]) > 480) segments.push([point]);
+        else segment.push(point);
+      }
+      for (const segment of segments) {
+        if (!segment.length) continue;
+        nodes.push(graphic('path', {d: pathOf(segment), fill: 'none', stroke: '#ffd966',
+          'stroke-width': 1.8, 'stroke-dasharray': '5 3', 'vector-effect': 'non-scaling-stroke'}));
+      }
+    }
+  }
   if (state.markStart) {
     nodes.push(graphic('circle', {cx: state.markStart[0], cy: state.markStart[1], r: 5, fill: '#ffbd76'}));
   }
@@ -184,6 +252,47 @@ function focusRow(index) {
   $('result-rows').querySelectorAll('tr').forEach((row, i) => row.classList.toggle('selected', i === index));
 }
 
+function swatch(color, label) {
+  const node = element('span');
+  node.append(element('i', null, {style: `background:${color}`}), document.createTextNode(label));
+  return node;
+}
+
+function drawAssessment() {
+  const report = state.archive || state.result;
+  const box = $('assessment');
+  const info = report?.assessment;
+  if (!info) {
+    box.hidden = true;
+    box.replaceChildren();
+    return;
+  }
+  box.hidden = false;
+  const summary = element('div', null, {class: 'summary'});
+  summary.append(element('strong', `磕口 ${info.mark}`));
+  if (info.status === 'ok') {
+    summary.append(element('span', `最深缺失 ${info.depth} mm`, {class: 'depth'}),
+      element('span', `最深处 ${info.deepest}°`));
+  } else {
+    summary.append(element('span', '深度留空', {class: 'depth empty'}));
+  }
+  const details = [];
+  if (info.points) {
+    const ranges = info.ranges.map(([a, b]) => `${a}°–${normalAngle(b)}°`).join('、');
+    details.push(`参照盘边 ${info.points} 点${ranges ? `（${ranges}）` : ''}`);
+  }
+  if (info.residual !== null && info.residual !== undefined) details.push(`拟合残差 ${info.residual} mm`);
+  if (info.note) details.push(info.note);
+  const nodes = [summary, element('div', details.join(' · '), {class: 'detail'})];
+  if (info.points || info.edge.length) {
+    const legend = element('div', null, {class: 'legend'});
+    legend.append(swatch('#7dd6e1', '参照盘边'), swatch('#ffbd76', '实测边'),
+      swatch('#ffd966', '估计边'), swatch('#ff7a7a', '最深处'));
+    nodes.push(legend);
+  }
+  box.replaceChildren(...nodes);
+}
+
 function drawRows() {
   const report = state.archive || state.result;
   const row = element('tr');
@@ -194,6 +303,7 @@ function drawRows() {
   $('no-rows').hidden = !!report.rows.length;
   $('result-rows').replaceChildren(...report.rows.map((item, index) => {
     const row = element('tr', null, {tabindex: 0, 'data-row': index});
+    if (item.reference) row.classList.add('reference');
     row.append(...report.columns.map(col => element('td', format(item[col.key]))));
     row.onclick = () => focusRow(index);
     row.onkeydown = event => {
@@ -217,6 +327,7 @@ function drawRows() {
     }
     return row;
   }));
+  drawAssessment();
 }
 
 function drawMenu(items, nav, empty, create) {
@@ -256,6 +367,7 @@ function drawMode() {
   $('downloads').hidden = !state.archive;
   $('mark-controls').hidden = mode !== 'surface';
   $('slice-controls').hidden = mode !== 'slice';
+  $('chip-controls').hidden = mode !== 'rim';
   $('modes').querySelectorAll('button').forEach(node => node.setAttribute('aria-pressed', node.dataset.mode === mode));
   for (const node of document.querySelectorAll('[data-tool]')) node.setAttribute('aria-pressed', node.dataset.tool === state.tool);
 }
@@ -264,6 +376,14 @@ async function loadStrip(settings, mode) {
   const blob = await api(panelPath() + '/strip', 'POST', {settings, mode}, 'blob');
   if (state.stripUrl) URL.revokeObjectURL(state.stripUrl);
   state.stripUrl = URL.createObjectURL(blob);
+}
+
+function drawChipSelect() {
+  const select = $('chip');
+  select.replaceChildren(element('option', '无参照', {value: ''}),
+    ...state.draft.marks.filter(mark => mark.kind === 'chip').map(mark =>
+      element('option', mark.id, {value: mark.id})));
+  select.value = state.draft.chip || '';
 }
 
 async function inspect() {
@@ -277,6 +397,7 @@ async function inspect() {
   state.markStart = null;
   state.tool = null;
   showFields();
+  drawChipSelect();
   drawMode();
   drawPhoto();
   drawStrip();
@@ -410,6 +531,12 @@ $('refresh').onclick = action(async () => {
   applyFields();
   await inspect();
   tell('展开已更新');
+});
+$('chip').onchange = action(async () => {
+  applyFields();
+  state.draft.chip = $('chip').value || null;
+  await inspect();
+  tell(state.draft.chip ? '已采用磕口参照，盘缘表逐点列出实测边与估计边。' : '已不使用磕口参照。');
 });
 $('retain').onclick = action(async () => {
   applyFields();
